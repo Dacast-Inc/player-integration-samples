@@ -132,7 +132,7 @@ class PlayerHandler extends Handler {
 public class DacastPlayer {
 
     private static String TAG = "DacastPlayer";
-    private static String JSON_URL_BASE = "http://json.dacast.com/b/";
+    private static String JSON_URL_BASE = "https://json.dacast.com/b/";
     private static String SERVICE_URL_BASE = "https://services.dacast.com/token/i/b/";
 
     private THEOplayerView theoplayer;
