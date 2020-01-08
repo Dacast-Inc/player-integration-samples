@@ -1,14 +1,5 @@
-//
-//  DacastPlayer.swift
-//  DacastPlayerIOS
-//
-//  Created by DaCast Admin on 6/20/18.
-//  Copyright © 2018 DaCast. All rights reserved.
-//
-
 import Foundation
 import THEOplayerSDK
-
 class ContentId{
     var broadcasterId: Int
     var mediaId: Int
@@ -108,7 +99,7 @@ public class DacastPlayer{
                 
                 var m3u8Link: String = jsonData["hls"] as! String
                 m3u8Link += serviceData["token"] as! String
-                var streamData = jsonData["stream"] as! [String : Any]
+                let streamData = jsonData["stream"] as! [String : Any]
                 let splashLink = streamData["splash"] as! String
                 let themeData = jsonData["theme"] as! [String : Any]
                 let watermarkData = themeData["watermark"] as! [String : Any]
