@@ -18,7 +18,7 @@ class ContentId{
         return String(self.broadcasterId) + "/" + self.contentType + "/" + String(self.mediaId)
     }
 }
-
+​
 extension UIImageView {
     func downloadedFrom(url: URL, contentMode mode: UIView.ContentMode = .scaleAspectFit) {
         contentMode = mode
@@ -39,7 +39,7 @@ extension UIImageView {
         downloadedFrom(url: url, contentMode: mode)
     }
 }
-
+​
 public class DacastPlayer{
     
     public var frame: CGRect{
@@ -69,7 +69,7 @@ public class DacastPlayer{
         let playerConfig = THEOplayerConfiguration(googleIMA: adUrl != nil)
         self.theoplayer = THEOplayer(configuration: playerConfig)
         theoplayer.insertAsSubview(of: view, at: 0)
-        
+                
         watermarkImg = UIImageView()
         watermarkImg.isOpaque = false
         watermarkImg.alpha = 0.3
@@ -90,6 +90,10 @@ public class DacastPlayer{
         return theoplayer
     }
     
+    private func toString(_ value: Any?) -> String {
+      return String(describing: value ?? "")
+    }
+    
     private func populatePlayerInfo(contentId: ContentId){
         makeGetCall(endpoint: "https://json.dacast.com/b/" + contentId.toUrl()){
             jsonData in
@@ -104,11 +108,26 @@ public class DacastPlayer{
                 let themeData = jsonData["theme"] as! [String : Any]
                 let watermarkData = themeData["watermark"] as! [String : Any]
                 let watermarkLink = watermarkData["url"]
+                let subTitles = jsonData["subtitles"]
+                
+                var textTracks : [TextTrackDescription] = []
+                for subTitle in subTitles as! [Dictionary<String,AnyObject>]
+                {
+                    let source = self.toString(subTitle["src"])
+                    let language = self.toString(subTitle["language"])
+                    let name = self.toString(subTitle["name"])
+                    
+                    let textTrack = TextTrackDescription(src: source, srclang: language, label: name)
+                    textTracks.append(textTrack)
+                }
+                
                 
                 DispatchQueue.main.async {
                     if !(watermarkLink is NSNull) && watermarkLink != nil {
                         self.watermarkImg.downloadedFrom(link: "https:" + (watermarkLink as! String))
                     }
+                    
+                           
                     let typedSource = TypedSource(src: m3u8Link, type: "application/x-mpegurl")
                     //let analytics = ()
                     
@@ -117,7 +136,7 @@ public class DacastPlayer{
                         let ad = GoogleImaAdDescription(src: self.adUrl!)
                         ads.append(ad)
                     }
-                    let source = SourceDescription(source: typedSource, ads: ads, poster: splashLink/*, analytics: [analytics]*/)
+                    let source = SourceDescription(source: typedSource, ads: ads, textTracks: textTracks, poster: splashLink/*, analytics: [analytics]*/)
                     self.theoplayer.source = source
                 }
             }
@@ -158,13 +177,12 @@ public class DacastPlayer{
                         return
                 }
                 onCompletion(parsedJson)
-
+​
             } catch  {
                 print("error trying to convert data to JSON")
                 return
             }
         }
-    
         task.resume()
     }
     
