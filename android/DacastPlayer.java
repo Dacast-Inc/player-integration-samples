@@ -142,7 +142,6 @@ class PlayerHandler extends Handler {
         switch (msg.what){
             case SET_CONTENT_INFO:
                 ContentInfo contentInfo = (ContentInfo)msg.obj;
-                Gson gson = new Gson();
 
                 ArrayList<TextTrack> textTracks = (ArrayList<TextTrack>) contentInfo.textTracks;
                 final int size = textTracks.size();
