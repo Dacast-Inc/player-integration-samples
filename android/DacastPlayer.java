@@ -13,13 +13,16 @@ import android.widget.RelativeLayout;
 
 import com.google.gson.Gson;
 import com.theoplayer.android.api.THEOplayerView;
+import com.theoplayer.android.api.player.track.texttrack.TextTrackKind;
 import com.theoplayer.android.api.source.SourceDescription;
+import com.theoplayer.android.api.source.TextTrackDescription;
 
 import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.ArrayList;
 
 class DownloadImageTask extends AsyncTask<String, Void, Bitmap> {
     ImageView bmImage;
@@ -72,33 +75,56 @@ class ContentInfo{
     public String m3u8Link;
     public String posterLink;
     public String adUrl;
+    public Object textTracks;
 
-    public ContentInfo(String m3u8Link, String posterLink, String adUrl){
-        this.m3u8Link = m3u8Link;
-        this.posterLink = posterLink;
+    public ContentInfo(JsonResponse json, ServiceResponse service, String adUrl){
+        this.m3u8Link = json.hls + service.token;
+        this.posterLink = json.stream.splash;
         this.adUrl = adUrl;
+        this.textTracks = json.subtitles;
     }
 }
 
+
 class JsonResponse{
-    JsonResponseContentInfo contentInfo;
+    String hls;
+    JsonResponseStream stream;
+    JsonResponseTheme theme;
+    ArrayList<TextTrack> subtitles;
 }
 
-class JsonResponseContentInfo{
-    JsonResponseFeatures features;
-    String splashscreenUrl;
-}
-
-class JsonResponseFeatures{
+class JsonResponseTheme{
     JsonResponseWatermark watermark;
 }
 
-class JsonResponseWatermark {
-    String imageUrl;
+class JsonResponseWatermark{
+    String url;
+}
+
+class JsonResponseStream{
+    String splash;
 }
 
 class ServiceResponse{
-    String hls;
+    String token;
+}
+
+class TextTrack{
+    String src;
+    String name;
+    String language;
+
+    public String getSrc() {
+        return this.src;
+    }
+
+    public String getName() {
+        return this.name;
+    }
+
+    public String getLanguage() {
+        return this.language;
+    }
 }
 
 class PlayerHandler extends Handler {
@@ -112,11 +138,31 @@ class PlayerHandler extends Handler {
 
     @Override
     public void handleMessage(Message msg) {
+
         switch (msg.what){
             case SET_CONTENT_INFO:
                 ContentInfo contentInfo = (ContentInfo)msg.obj;
+                Gson gson = new Gson();
+
+                ArrayList<TextTrack> textTracks = (ArrayList<TextTrack>) contentInfo.textTracks;
+                final int size = textTracks.size();
+
+                TextTrackDescription[] subtitleArray = new TextTrackDescription[size];
+
+                for (int i = 0; i < size; i++) {
+                    TextTrack textTrack = (TextTrack) textTracks.get(i);
+                    TextTrackDescription subtitle = new TextTrackDescription(
+                            textTrack.getSrc(), //src
+                            false, //isDefault
+                            TextTrackKind.SUBTITLES,
+                            textTrack.getLanguage(), //srclang
+                            textTrack.getName() // label
+                    );
+                    subtitleArray[i] = subtitle;
+                }
+
                 SourceDescription.Builder sourceDescription = SourceDescription.Builder.sourceDescription(contentInfo.m3u8Link)
-                        .poster(contentInfo.posterLink);
+                        .poster(contentInfo.posterLink).textTracks(subtitleArray);
 
                 if(contentInfo.adUrl != null){
                     sourceDescription.ads(contentInfo.adUrl);
@@ -131,8 +177,8 @@ class PlayerHandler extends Handler {
 public class DacastPlayer {
 
     private static String TAG = "DacastPlayer";
-    private static String JSON_URL_BASE = "https://playback.dacast.com/content/info";
-    private static String SERVICE_URL_BASE = "https://playback.dacast.com/content/access";
+    private static String JSON_URL_BASE = "https://json.dacast.com/b/";
+    private static String SERVICE_URL_BASE = "https://services.dacast.com/token/i/b/";
 
     private THEOplayerView theoplayer;
     private PlayerHandler handler;
@@ -143,7 +189,7 @@ public class DacastPlayer {
         this(activity, contentIdStr, null);
     }
 
-    public DacastPlayer(Activity activity, String contentId, String adUrl) {
+    public DacastPlayer(Activity activity, String contentIdStr, String adUrl) {
         theoplayer = new THEOplayerView(activity);
         handler = new PlayerHandler(theoplayer);
         watermarkImage = new ImageView(activity);
@@ -163,6 +209,15 @@ public class DacastPlayer {
         layout.addView(watermarkImage, paramsImage);
         watermarkImage.setImageAlpha(90);
 
+
+        ContentId contentId;
+        try {
+            contentId = ContentId.parse(contentIdStr);
+        } catch (Exception e) {
+            e.printStackTrace();
+            Log.v(TAG, "Invalid content id provided: " + contentIdStr);
+            return;
+        }
         fetchVideoInfo(contentId, adUrl);
     }
 
@@ -186,29 +241,26 @@ public class DacastPlayer {
         theoplayer.onDestroy();
     }
 
-    private void fetchVideoInfo(final String contentId, final String adUrl){
+    private void fetchVideoInfo(final ContentId contentId, final String adUrl){
         new Thread(new Runnable() {
             @Override
             public void run() {
                 try {
-                    String provider = "vzaar";
-                    if(contentId.contains("_")){
-                        provider = "dacast";
-                    }
 
-                    String rawJson = httpGet( JSON_URL_BASE + "?contentId="  + contentId + "&provider=" + provider);
-                    String rawToken = httpGet(SERVICE_URL_BASE + "?contentId="  + contentId + "&provider=" + provider);
+                    String rawJson = httpGet( JSON_URL_BASE + contentId.broadcasterId + "/" + contentId.contentType + "/" + contentId.mediaId);
+                    String rawToken = httpGet(SERVICE_URL_BASE + contentId.broadcasterId + "/" + contentId.contentType + "/" + contentId.mediaId);
 
                     Gson gson = new Gson();
                     JsonResponse json = gson.fromJson(rawJson, JsonResponse.class);
+
                     ServiceResponse token = gson.fromJson(rawToken, ServiceResponse.class);
 
-                    ContentInfo contentInfo = new ContentInfo(token.hls, json.contentInfo.splashscreenUrl, adUrl);
+                    ContentInfo contentInfo = new ContentInfo(json, token, adUrl);
                     handler.sendMessage(handler.obtainMessage(PlayerHandler.SET_CONTENT_INFO, contentInfo));
 
-                    if(json.contentInfo.features.watermark.imageUrl != null){
+                    if(json.theme.watermark.url != null){
                         new DownloadImageTask(watermarkImage)
-                                .execute("https:" + json.contentInfo.features.watermark.imageUrl);
+                                .execute("https:" + json.theme.watermark.url);
                     }
 
                 } catch (Exception e) {
