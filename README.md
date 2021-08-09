@@ -1,3 +1,3 @@
-# Dacast-mobile-sdks
+# Example code to interact with Dacast player 
 
-Code for Dacast mobile SDK's
+This is unmaintained code and provided as examples only
